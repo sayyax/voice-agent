@@ -9,13 +9,22 @@ data class Validation(val ok: Boolean, val reason: String = "")
 class ActionValidator(private val apps: List<AppEntry>) {
     fun validate(action: Action): Validation {
         if (action.name !in ActionNames.supported) {
-            return Validation(false, "Bu buyruqni hali tushunmayman.")
+            return Validation(false, "Bu buyruqni hali bajara olmayman.")
         }
         return when (action.name) {
             ActionNames.OPEN_APP -> {
                 val id = action.params["app"]
-                    ?: return Validation(false, "Qaysi ilovani ochish kerak?")
-                if (apps.none { it.id == id }) Validation(false, "Noma'lum ilova: $id")
+                if (id.isNullOrBlank()) Validation(false, "Qaysi ilovani ochish kerak?")
+                else if (apps.none { it.id == id }) Validation(false, "Noma'lum ilova: $id")
+                else Validation(true)
+            }
+            ActionNames.OPEN_URL -> {
+                val url = action.params["url"].orEmpty()
+                if (url.startsWith("https://") || url.startsWith("http://")) Validation(true)
+                else Validation(false, "Havola noto'g'ri.")
+            }
+            ActionNames.SEARCH_YOUTUBE -> {
+                if (action.params["query"].isNullOrBlank()) Validation(false, "Nimani qidirish kerak?")
                 else Validation(true)
             }
             else -> Validation(false, "Noma'lum action.")

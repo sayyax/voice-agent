@@ -1,6 +1,5 @@
 package uz.agent.voice.agent.tools
 
-/** LLM / parser chiqaradigan tuzilmali action. Android'ga to'g'ridan-to'g'ri buyruq yuborilmaydi. */
 data class Action(
     val name: String,
     val params: Map<String, String> = emptyMap()
@@ -13,6 +12,11 @@ data class ActionResult(val ok: Boolean, val message: String)
 
 object ActionNames {
     const val OPEN_APP = "open_app"
+    const val OPEN_URL = "open_url"
+    const val SEARCH_YOUTUBE = "search_youtube"
+    const val CLARIFY = "clarify"
     const val UNKNOWN = "unknown"
-    val supported = setOf(OPEN_APP)
+
+    /** Executor bajara oladigan actionlar. */
+    val supported = setOf(OPEN_APP, OPEN_URL, SEARCH_YOUTUBE)
 }

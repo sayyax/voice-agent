@@ -28,11 +28,13 @@ object CommandParser {
             .replace(Regex("\\s+"), " ")
             .trim()
 
+    /** Faqat qisqa "X ni och" turidagi buyruqlar. Uzun/murakkab gaplar LLM'ga beriladi. */
     fun parse(text: String, apps: List<AppEntry>): Action {
         val t = normalize(text)
         if (t.isEmpty()) return Action(ActionNames.UNKNOWN)
 
         val words = t.split(" ")
+        if (words.size > 4) return Action(ActionNames.UNKNOWN)
         val wantsOpen = words.any { it.startsWith("och") || it.startsWith("kir") } ||
             t.contains("ishga tushir")
         if (!wantsOpen) return Action(ActionNames.UNKNOWN)

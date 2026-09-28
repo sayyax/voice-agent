@@ -2,6 +2,7 @@ package uz.agent.voice.ui
 
 import android.Manifest
 import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
@@ -12,7 +13,12 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import uz.agent.voice.agent.tools.Action
 import uz.agent.voice.agent.tools.ActionExecutor
+import uz.agent.voice.agent.tools.ActionNames
+import uz.agent.voice.config.Prefs
+import uz.agent.voice.llm.GeminiProvider
+import uz.agent.voice.llm.LLMPlan
 import uz.agent.voice.voice.AndroidSttProvider
 import uz.agent.voice.voice.AndroidTtsProvider
 import uz.agent.voice.voice.STTProvider
@@ -90,7 +96,7 @@ class MainActivity : Activity() {
         permissionView = label("").also { root.addView(it) }
 
         input = EditText(this).apply {
-            hint = "Masalan: Telegramni och"
+            hint = "Masalan: Youtube'dan Sting qo'shig'ini qo'y"
             setSingleLine(true)
             imeOptions = EditorInfo.IME_ACTION_DONE
             setOnEditorActionListener { _, id, _ ->
@@ -111,6 +117,10 @@ class MainActivity : Activity() {
             setOnClickListener { toggleMic() }
         }
         row.addView(micButton, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(Button(this).apply {
+            text = "Sozlamalar"
+            setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         root.addView(row)
 
         logView = TextView(this).apply {
@@ -153,8 +163,9 @@ class MainActivity : Activity() {
         checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     private fun refreshPermissions() {
+        val llm = if (Prefs.geminiKey(this) != null) "Gemini kaliti bor" else "Gemini kaliti yo'q"
         permissionView.text = "Mikrofon: " + (if (hasMic()) "berilgan" else "berilmagan") +
-            " | Accessibility: 4-bosqichda"
+            " | LLM: $llm | Accessibility: 4-bosqichda"
     }
 
     private fun toggleMic() {
@@ -187,17 +198,60 @@ class MainActivity : Activity() {
         setPadding(0, dp(4), 0, 0)
     }
 
+    /** Avval tez oflayn parser, tushunmasa LLM. */
     private fun run(text: String) {
         if (text.isEmpty()) return
         lastCommandView.text = "Oxirgi buyruq: $text"
-        statusView.text = "Holat: bajarilmoqda"
-        val action = executor.plan(text)
+        val local = executor.plan(text)
+        if (local.name != ActionNames.UNKNOWN) {
+            perform(local)
+            return
+        }
+        val key = Prefs.geminiKey(this)
+        if (key == null) {
+            report(false, "Bu buyruq uchun Gemini kerak. Sozlamalarda API kalitni kiriting.")
+            return
+        }
+        statusView.text = "Holat: o'ylayapman..."
+        val model = Prefs.model(this)
+        val ids = executor.appIds()
+        Thread {
+            val plan = GeminiProvider(key, model).plan(text, ids)
+            runOnUiThread { handlePlan(plan) }
+        }.start()
+    }
+
+    private fun handlePlan(plan: LLMPlan) {
+        if (plan.error != null) {
+            report(false, plan.error)
+            return
+        }
+        val action = plan.action
+        if (action == null || action.name == ActionNames.UNKNOWN) {
+            report(false, plan.say ?: "Buyruqni tushunmadim.")
+            return
+        }
+        if (action.name == ActionNames.CLARIFY) {
+            val q = plan.say ?: "Buyruqni aniqroq ayting."
+            statusView.text = "Holat: tayyor"
+            log("AGENT $q")
+            tts.speak(q)
+            return
+        }
+        perform(action)
+    }
+
+    private fun perform(action: Action) {
         lastActionView.text = "Oxirgi action: $action"
         val result = executor.execute(action)
-        statusView.text = if (result.ok) "Holat: tayyor" else "Holat: xato"
-        log((if (result.ok) "OK  " else "XATO ") + result.message)
-        tts.speak(result.message)
-        if (result.ok) input.setText("")
+        report(result.ok, result.message)
+    }
+
+    private fun report(ok: Boolean, msg: String) {
+        statusView.text = if (ok) "Holat: tayyor" else "Holat: xato"
+        log((if (ok) "OK  " else "XATO ") + msg)
+        tts.speak(msg)
+        if (ok) input.setText("")
     }
 
     private fun log(msg: String) {
