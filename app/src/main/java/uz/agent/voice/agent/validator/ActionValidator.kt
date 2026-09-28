@@ -2,6 +2,7 @@ package uz.agent.voice.agent.validator
 
 import uz.agent.voice.agent.tools.Action
 import uz.agent.voice.agent.tools.ActionNames
+import uz.agent.voice.android.accessibility.AgentAccessibilityService
 import uz.agent.voice.android.apps.AppEntry
 
 data class Validation(val ok: Boolean, val reason: String = "")
@@ -10,6 +11,9 @@ class ActionValidator(private val apps: List<AppEntry>) {
     fun validate(action: Action): Validation {
         if (action.name !in ActionNames.supported) {
             return Validation(false, "Bu buyruqni hali bajara olmayman.")
+        }
+        if (action.name in ActionNames.needsAccessibility && !AgentAccessibilityService.isEnabled()) {
+            return Validation(false, "Bu amal uchun Accessibility permission kerak.")
         }
         return when (action.name) {
             ActionNames.OPEN_APP -> {
@@ -27,6 +31,16 @@ class ActionValidator(private val apps: List<AppEntry>) {
                 if (action.params["query"].isNullOrBlank()) Validation(false, "Nimani qidirish kerak?")
                 else Validation(true)
             }
+            ActionNames.CLICK_TEXT -> {
+                if (action.params["text"].isNullOrBlank()) Validation(false, "Nimani bosish kerak?")
+                else Validation(true)
+            }
+            ActionNames.TYPE_TEXT -> {
+                if (action.params["text"].isNullOrBlank()) Validation(false, "Nima yozish kerak?")
+                else Validation(true)
+            }
+            ActionNames.PRESS_BACK, ActionNames.PRESS_HOME, ActionNames.PRESS_RECENTS,
+            ActionNames.SCROLL_DOWN, ActionNames.SCROLL_UP -> Validation(true)
             else -> Validation(false, "Noma'lum action.")
         }
     }

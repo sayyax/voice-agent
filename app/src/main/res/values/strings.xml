@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Ovozli Agent shu xizmat orqali ekrandagi tugmalarni bosadi, matn kiritadi va ilova qaysi ekranda ekanini tekshiradi. Faqat siz bergan ovozli/matnli buyruqlarga javoban ishlaydi.</string>
+</resources>

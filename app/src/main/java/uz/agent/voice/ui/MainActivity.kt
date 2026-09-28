@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
+import android.provider.Settings
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
@@ -16,6 +17,7 @@ import android.widget.TextView
 import uz.agent.voice.agent.tools.Action
 import uz.agent.voice.agent.tools.ActionExecutor
 import uz.agent.voice.agent.tools.ActionNames
+import uz.agent.voice.android.accessibility.AgentAccessibilityService
 import uz.agent.voice.config.Prefs
 import uz.agent.voice.llm.GeminiProvider
 import uz.agent.voice.llm.LLMPlan
@@ -96,7 +98,7 @@ class MainActivity : Activity() {
         permissionView = label("").also { root.addView(it) }
 
         input = EditText(this).apply {
-            hint = "Masalan: Youtube'dan Sting qo'shig'ini qo'y"
+            hint = "Masalan: Orqaga qayt / Pastga sur"
             setSingleLine(true)
             imeOptions = EditorInfo.IME_ACTION_DONE
             setOnEditorActionListener { _, id, _ ->
@@ -122,6 +124,13 @@ class MainActivity : Activity() {
             setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         root.addView(row)
+
+        root.addView(Button(this).apply {
+            text = "Accessibility ruxsatini ochish"
+            setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(4) })
 
         logView = TextView(this).apply {
             textSize = 13f
@@ -164,8 +173,9 @@ class MainActivity : Activity() {
 
     private fun refreshPermissions() {
         val llm = if (Prefs.geminiKey(this) != null) "Gemini kaliti bor" else "Gemini kaliti yo'q"
+        val acc = if (AgentAccessibilityService.isEnabled()) "yoqilgan" else "o'chiq"
         permissionView.text = "Mikrofon: " + (if (hasMic()) "berilgan" else "berilmagan") +
-            " | LLM: $llm | Accessibility: 4-bosqichda"
+            " | LLM: $llm | Accessibility: $acc"
     }
 
     private fun toggleMic() {
@@ -198,7 +208,7 @@ class MainActivity : Activity() {
         setPadding(0, dp(4), 0, 0)
     }
 
-    /** Avval tez oflayn parser, tushunmasa LLM. */
+    /** Avval tez oflayn parser, tushunmasa LLM. Bajarish har doim fon oqimida. */
     private fun run(text: String) {
         if (text.isEmpty()) return
         lastCommandView.text = "Oxirgi buyruq: $text"
@@ -243,8 +253,11 @@ class MainActivity : Activity() {
 
     private fun perform(action: Action) {
         lastActionView.text = "Oxirgi action: $action"
-        val result = executor.execute(action)
-        report(result.ok, result.message)
+        statusView.text = "Holat: bajarilmoqda"
+        Thread {
+            val result = executor.execute(action)
+            runOnUiThread { report(result.ok, result.message) }
+        }.start()
     }
 
     private fun report(ok: Boolean, msg: String) {

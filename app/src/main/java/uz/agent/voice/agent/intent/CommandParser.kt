@@ -15,6 +15,10 @@ object CommandParser {
         'қ' to "q", 'ғ' to "g", 'ҳ' to "h", 'ы' to "i", 'ь' to "", 'ъ' to ""
     )
 
+    private val backWords = setOf("orqaga", "ortga", "qaytish")
+    private val homeWords = setOf("bosh menyu", "asosiy menyu", "bosh ekran")
+    private val recentsWords = setOf("songi ilovalar", "oxirgi ilovalar", "recent apps")
+
     private fun toLatin(s: String): String {
         val sb = StringBuilder()
         for (c in s) sb.append(cyr[c] ?: c.toString())
@@ -28,10 +32,14 @@ object CommandParser {
             .replace(Regex("\\s+"), " ")
             .trim()
 
-    /** Faqat qisqa "X ni och" turidagi buyruqlar. Uzun/murakkab gaplar LLM'ga beriladi. */
+    /** Faqat qisqa, aniq buyruqlar. Murakkab/uzun gaplar LLM'ga beriladi. */
     fun parse(text: String, apps: List<AppEntry>): Action {
         val t = normalize(text)
         if (t.isEmpty()) return Action(ActionNames.UNKNOWN)
+
+        if (t in backWords) return Action(ActionNames.PRESS_BACK)
+        if (t in homeWords) return Action(ActionNames.PRESS_HOME)
+        if (t in recentsWords) return Action(ActionNames.PRESS_RECENTS)
 
         val words = t.split(" ")
         if (words.size > 4) return Action(ActionNames.UNKNOWN)
