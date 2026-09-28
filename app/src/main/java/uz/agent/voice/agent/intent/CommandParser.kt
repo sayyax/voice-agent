@@ -4,11 +4,25 @@ import uz.agent.voice.agent.tools.Action
 import uz.agent.voice.agent.tools.ActionNames
 import uz.agent.voice.android.apps.AppEntry
 
-/** Oddiy qoidaga asoslangan parser. 3-bosqichda LLMProvider bilan almashtiriladi/to'ldiriladi. */
 object CommandParser {
 
+    private val cyr = mapOf(
+        'а' to "a", 'б' to "b", 'в' to "v", 'г' to "g", 'д' to "d", 'е' to "e",
+        'ё' to "yo", 'ж' to "j", 'з' to "z", 'и' to "i", 'й' to "y", 'к' to "k",
+        'л' to "l", 'м' to "m", 'н' to "n", 'о' to "o", 'п' to "p", 'р' to "r",
+        'с' to "s", 'т' to "t", 'у' to "u", 'ф' to "f", 'х' to "x", 'ц' to "ts",
+        'ч' to "ch", 'ш' to "sh", 'э' to "e", 'ю' to "yu", 'я' to "ya", 'ў' to "o",
+        'қ' to "q", 'ғ' to "g", 'ҳ' to "h", 'ы' to "i", 'ь' to "", 'ъ' to ""
+    )
+
+    private fun toLatin(s: String): String {
+        val sb = StringBuilder()
+        for (c in s) sb.append(cyr[c] ?: c.toString())
+        return sb.toString()
+    }
+
     fun normalize(s: String): String =
-        s.lowercase()
+        toLatin(s.lowercase())
             .replace(Regex("[’‘ʻʼ`´']"), "")
             .replace(Regex("[^\\p{L}\\p{N} ]"), " ")
             .replace(Regex("\\s+"), " ")
