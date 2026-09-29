@@ -18,6 +18,8 @@ object CommandParser {
     private val backWords = setOf("orqaga", "ortga", "qaytish")
     private val homeWords = setOf("bosh menyu", "asosiy menyu", "bosh ekran")
     private val recentsWords = setOf("songi ilovalar", "oxirgi ilovalar", "recent apps")
+    private val yesWords = setOf("ha", "xa", "mayli", "boladi", "ok", "yubor", "yuboraver")
+    private val noWords = setOf("yoq", "kerak emas", "bekor", "bekor qil", "toxta")
 
     private fun toLatin(s: String): String {
         val sb = StringBuilder()
@@ -31,6 +33,14 @@ object CommandParser {
             .replace(Regex("[^\\p{L}\\p{N} ]"), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
+
+    /** "Ha" / "yo'q" turidagi tasdiq javobini aniqlaydi. Aniqlanmasa null. */
+    fun parseYesNo(text: String): Boolean? {
+        val t = normalize(text)
+        if (t in yesWords) return true
+        if (t in noWords) return false
+        return null
+    }
 
     /** Faqat qisqa, aniq buyruqlar. Murakkab/uzun gaplar LLM'ga beriladi. */
     fun parse(text: String, apps: List<AppEntry>): Action {

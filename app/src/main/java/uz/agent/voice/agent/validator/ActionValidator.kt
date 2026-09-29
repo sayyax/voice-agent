@@ -39,6 +39,15 @@ class ActionValidator(private val apps: List<AppEntry>) {
                 if (action.params["text"].isNullOrBlank()) Validation(false, "Nima yozish kerak?")
                 else Validation(true)
             }
+            ActionNames.OPEN_TELEGRAM_CHAT -> {
+                if (action.params["name"].isNullOrBlank()) Validation(false, "Qaysi chat yoki guruhni ochish kerak?")
+                else Validation(true)
+            }
+            ActionNames.SEND_TELEGRAM_MESSAGE -> {
+                if (action.params["name"].isNullOrBlank()) Validation(false, "Kimga yuborish kerak?")
+                else if (action.params["message"].isNullOrBlank()) Validation(false, "Nima deb yozish kerak?")
+                else Validation(true)
+            }
             ActionNames.PRESS_BACK, ActionNames.PRESS_HOME, ActionNames.PRESS_RECENTS,
             ActionNames.SCROLL_DOWN, ActionNames.SCROLL_UP -> Validation(true)
             else -> Validation(false, "Noma'lum action.")

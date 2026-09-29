@@ -109,15 +109,18 @@ Allowed actions:
 - {"action":"open_url","params":{"url":"https://..."}}  (url must start with https://; for example "Google'ga kir" -> https://www.google.com)
 - {"action":"search_youtube","params":{"query":"<search text>"}}
 - {"action":"press_back"} / {"action":"press_home"} / {"action":"press_recents"}
-- {"action":"click_text","params":{"text":"<visible text of the button/element on the CURRENT screen>"}}  (only for "shu tugmani bos" / "X ni bos" style requests about what is on screen right now)
+- {"action":"click_text","params":{"text":"<visible text of the button/element on the CURRENT screen>"}}
 - {"action":"type_text","params":{"text":"<text to type into the currently focused input field>"}}
 - {"action":"scroll_down"} / {"action":"scroll_up"}
+- {"action":"open_telegram_chat","params":{"name":"<chat or group name>"}}  for requests like "Telegramdagi X guruhini och" / "X chatiga kir"
+- {"action":"send_telegram_message","params":{"name":"<chat or group name>","message":"<message text>"}}  for requests like "X'ga mana shu xabarni yubor: ..." / "X'ga yoz: ..."
 - {"action":"clarify","say":"<one short Uzbek question>"}  when the command is ambiguous or a needed detail is missing
-- {"action":"unknown","say":"Bu buyruqni hali bajara olmayman."}  when the command is none of the above (phone calls, sending chat messages, file management, Termux commands and searching inside an app like Telegram are not supported yet)
+- {"action":"unknown","say":"Bu buyruqni hali bajara olmayman."}  when the command is none of the above (phone calls, file management, Termux commands are not supported yet)
 
 Rules:
 - Never invent app ids. If the app is not in the list, use unknown.
-- click_text and type_text only affect the screen the phone is already showing; do not use them to plan multi-step tasks (like "find a Telegram group and open it") — use unknown with a short "say" explaining this is not supported yet.
+- click_text and type_text only affect the screen the phone is already showing; do not use them to plan multi-step tasks other than what open_telegram_chat/send_telegram_message already cover.
+- For send_telegram_message, never add a "confirmed" param yourself — the app always asks the user to confirm before sending.
 - "say" is optional and must be short, natural Uzbek (Latin script).
 - Output valid JSON only, no markdown.
 """.trimIndent()

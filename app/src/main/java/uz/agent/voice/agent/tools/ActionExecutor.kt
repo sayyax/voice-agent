@@ -12,9 +12,8 @@ import uz.agent.voice.android.apps.AppRegistry
 
 /**
  * Pipeline: matn -> Action -> validator -> executor -> natija.
- * OPEN_APP kabi actionlarda Accessibility yoqilgan bo'lsa, natija haqiqatan
- * tekshiriladi (foreground app), aks holda faqat "buyruq yuborildi" deyiladi.
- * Chaqiruvchi bu funksiyani UI oqimida emas, alohida Thread'da ishlatishi kerak.
+ * Chaqiruvchi bu funksiyani UI oqimida emas, alohida Thread'da ishlatishi kerak
+ * (Telegram va boshqa Accessibility actionlar bir necha soniya kutishi mumkin).
  */
 class ActionExecutor(private val ctx: Context) {
     private val apps = AppRegistry.load(ctx)
@@ -68,8 +67,55 @@ class ActionExecutor(private val ctx: Context) {
             ActionNames.SCROLL_UP ->
                 if (AgentAccessibilityService.scroll(false)) ActionResult(true, "Yuqoriga suryapman.")
                 else ActionResult(false, "Scroll qilib bo'lmadi.")
+            ActionNames.OPEN_TELEGRAM_CHAT -> {
+                val name = action.params.getValue("name")
+                val opened = openTelegramFirst(name)
+                if (opened.ok) opened else return opened
+                describeTelegram(TelegramActions.openChat(name).let { it }, name)
+            }
+            ActionNames.SEND_TELEGRAM_MESSAGE -> {
+                val name = action.params.getValue("name")
+                val msg = action.params.getValue("message")
+                val openRes = openTelegramFirst(name)
+                if (!openRes.ok) return openRes
+                when (val r = TelegramActions.openChat(name)) {
+                    is TelegramOutcome.Opened -> {
+                        Thread.sleep(400)
+                        if (!AgentAccessibilityService.typeText(msg)) {
+                            ActionResult(false, "Xabar matnini kiritolmadim.")
+                        } else {
+                            Thread.sleep(300)
+                            val sent = AgentAccessibilityService.clickByCandidates("send", "yubor", "отправить")
+                            if (sent) ActionResult(true, "\"${r.name}\"ga xabar yuborildi.")
+                            else ActionResult(false, "Yuborish tugmasini topolmadim.")
+                        }
+                    }
+                    is TelegramOutcome.Ambiguous ->
+                        ActionResult(false, "Bir nechta mos chat topildi: ${r.options.joinToString(", ")}. Aniqroq nom ayting.")
+                    TelegramOutcome.NotFound -> ActionResult(false, "\"$name\" nomli chat topilmadi.")
+                    TelegramOutcome.NoAccessibility -> ActionResult(false, "Bu amal uchun Accessibility permission kerak.")
+                }
+            }
             else -> ActionResult(false, "Noma'lum action.")
         }
+    }
+
+    /** Telegram'ni oldindan ochib, foreground bo'lishini kutadi. */
+    private fun openTelegramFirst(name: String): ActionResult {
+        val telegram = apps.firstOrNull { it.id == "telegram" }
+            ?: return ActionResult(false, "Telegram ilovasi ro'yxatda yo'q.")
+        val res = openApp(telegram)
+        if (!res.ok) return res
+        Thread.sleep(600)
+        return ActionResult(true, "")
+    }
+
+    private fun describeTelegram(outcome: TelegramOutcome, name: String): ActionResult = when (outcome) {
+        is TelegramOutcome.Opened -> ActionResult(true, "\"${outcome.name}\" ochildi.")
+        is TelegramOutcome.Ambiguous ->
+            ActionResult(false, "Bir nechta mos chat topildi: ${outcome.options.joinToString(", ")}. Aniqroq nom ayting.")
+        TelegramOutcome.NotFound -> ActionResult(false, "\"$name\" nomli chat topilmadi.")
+        TelegramOutcome.NoAccessibility -> ActionResult(false, "Bu amal uchun Accessibility permission kerak.")
     }
 
     private fun openApp(entry: AppEntry): ActionResult {

@@ -14,6 +14,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import uz.agent.voice.agent.intent.CommandParser
 import uz.agent.voice.agent.tools.Action
 import uz.agent.voice.agent.tools.ActionExecutor
 import uz.agent.voice.agent.tools.ActionNames
@@ -43,6 +44,7 @@ class MainActivity : Activity() {
     private lateinit var input: EditText
     private lateinit var micButton: Button
     private var listening = false
+    private var pendingConfirm: Action? = null
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -98,7 +100,7 @@ class MainActivity : Activity() {
         permissionView = label("").also { root.addView(it) }
 
         input = EditText(this).apply {
-            hint = "Masalan: Orqaga qayt / Pastga sur"
+            hint = "Masalan: Telegramdagi X guruhini och"
             setSingleLine(true)
             imeOptions = EditorInfo.IME_ACTION_DONE
             setOnEditorActionListener { _, id, _ ->
@@ -208,10 +210,20 @@ class MainActivity : Activity() {
         setPadding(0, dp(4), 0, 0)
     }
 
-    /** Avval tez oflayn parser, tushunmasa LLM. Bajarish har doim fon oqimida. */
+    /** Avval tasdiq kutilyaptimi tekshiradi, keyin oflayn parser, keyin LLM. */
     private fun run(text: String) {
         if (text.isEmpty()) return
         lastCommandView.text = "Oxirgi buyruq: $text"
+
+        val pending = pendingConfirm
+        if (pending != null) {
+            when (CommandParser.parseYesNo(text)) {
+                true -> { pendingConfirm = null; perform(pending); return }
+                false -> { pendingConfirm = null; report(true, "Bekor qilindi."); return }
+                null -> { report(false, "Tushunmadim. \"Ha\" yoki \"yo'q\" deng."); return }
+            }
+        }
+
         val local = executor.plan(text)
         if (local.name != ActionNames.UNKNOWN) {
             perform(local)
@@ -244,6 +256,14 @@ class MainActivity : Activity() {
         if (action.name == ActionNames.CLARIFY) {
             val q = plan.say ?: "Buyruqni aniqroq ayting."
             statusView.text = "Holat: tayyor"
+            log("AGENT $q")
+            tts.speak(q)
+            return
+        }
+        if (action.name in ActionNames.needsConfirmation) {
+            pendingConfirm = action
+            val q = "\"${action.params["name"]}\"ga \"${action.params["message"]}\" deb yuboraymi?"
+            statusView.text = "Holat: tasdiq kutilmoqda"
             log("AGENT $q")
             tts.speak(q)
             return

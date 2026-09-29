@@ -84,16 +84,27 @@ class AgentAccessibilityService : AccessibilityService() {
             return null
         }
 
-        fun clickText(text: String): Boolean {
-            val node = findNodeByText(text) ?: return false
+        private fun clickable(node: AccessibilityNodeInfo): AccessibilityNodeInfo {
             var target: AccessibilityNodeInfo? = node
             var hops = 0
             while (target != null && !target.isClickable && hops < 8) {
                 target = target.parent
                 hops++
             }
-            val finalTarget = target ?: node
-            return finalTarget.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            return target ?: node
+        }
+
+        fun clickText(text: String): Boolean {
+            val node = findNodeByText(text) ?: return false
+            return clickable(node).performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        }
+
+        /** Bir nechta variant (masalan turli tildagi "Search") ichidan birinchi topilganini bosadi. */
+        fun clickByCandidates(vararg candidates: String): Boolean {
+            for (c in candidates) {
+                if (clickText(c)) return true
+            }
+            return false
         }
 
         fun typeText(text: String): Boolean {
@@ -135,5 +146,34 @@ class AgentAccessibilityService : AccessibilityService() {
             }
             return null
         }
+
+        /**
+         * Ekrandan (masalan qidiruv natijalaridan) berilgan so'zni o'z ichiga olgan,
+         * kiritish maydoni bo'lmagan qisqa matnlarni yig'ib beradi (chat/guruh nomlari uchun).
+         */
+        fun findMatches(query: String, maxResults: Int = 6): List<String> {
+            val svc = instance ?: return emptyList()
+            val root = svc.rootInActiveWindow ?: return emptyList()
+            val out = LinkedHashSet<String>()
+            collectMatches(root, query.lowercase(), out, maxResults)
+            return out.toList()
+        }
+
+        private fun collectMatches(
+            node: AccessibilityNodeInfo, q: String, out: MutableSet<String>, max: Int
+        ) {
+            if (out.size >= max) return
+            if (!node.isEditable) {
+                val t = node.text?.toString()
+                if (t != null && t.length in 1..60 && t.lowercase().contains(q)) out.add(t)
+            }
+            for (i in 0 until node.childCount) {
+                if (out.size >= max) return
+                val child = node.getChild(i) ?: continue
+                collectMatches(child, q, out, max)
+            }
+        }
+
+        fun clickMatch(text: String): Boolean = clickText(text)
     }
 }

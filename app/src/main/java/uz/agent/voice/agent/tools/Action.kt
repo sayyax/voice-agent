@@ -21,6 +21,8 @@ object ActionNames {
     const val TYPE_TEXT = "type_text"
     const val SCROLL_DOWN = "scroll_down"
     const val SCROLL_UP = "scroll_up"
+    const val OPEN_TELEGRAM_CHAT = "open_telegram_chat"
+    const val SEND_TELEGRAM_MESSAGE = "send_telegram_message"
     const val CLARIFY = "clarify"
     const val UNKNOWN = "unknown"
 
@@ -28,11 +30,16 @@ object ActionNames {
     val supported = setOf(
         OPEN_APP, OPEN_URL, SEARCH_YOUTUBE,
         PRESS_BACK, PRESS_HOME, PRESS_RECENTS,
-        CLICK_TEXT, TYPE_TEXT, SCROLL_DOWN, SCROLL_UP
+        CLICK_TEXT, TYPE_TEXT, SCROLL_DOWN, SCROLL_UP,
+        OPEN_TELEGRAM_CHAT, SEND_TELEGRAM_MESSAGE
     )
 
     /** Accessibility ruxsati yoqilgan bo'lishi shart bo'lgan actionlar. */
     val needsAccessibility = setOf(
-        PRESS_BACK, PRESS_HOME, PRESS_RECENTS, CLICK_TEXT, TYPE_TEXT, SCROLL_DOWN, SCROLL_UP
+        PRESS_BACK, PRESS_HOME, PRESS_RECENTS, CLICK_TEXT, TYPE_TEXT, SCROLL_DOWN, SCROLL_UP,
+        OPEN_TELEGRAM_CHAT, SEND_TELEGRAM_MESSAGE
     )
+
+    /** Bajarishdan oldin foydalanuvchidan ovozli tasdiq so'raladigan actionlar. */
+    val needsConfirmation = setOf(SEND_TELEGRAM_MESSAGE)
 }
