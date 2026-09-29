@@ -1,7 +1,9 @@
 package uz.agent.voice.agent.tools
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import uz.agent.voice.agent.intent.CommandParser
 import uz.agent.voice.agent.validator.ActionValidator
@@ -10,11 +12,12 @@ import uz.agent.voice.android.apps.AppEntry
 import uz.agent.voice.android.apps.AppOpener
 import uz.agent.voice.android.apps.AppRegistry
 import uz.agent.voice.android.contacts.ContactsLookup
+import uz.agent.voice.android.files.FileTools
+import uz.agent.voice.termux.TermuxBridge
 
 /**
- * Pipeline: matn -> Action -> validator -> executor -> natija.
- * Chaqiruvchi bu funksiyani UI oqimida emas, alohida Thread'da ishlatishi kerak
- * (Telegram va boshqa Accessibility actionlar bir necha soniya kutishi mumkin).
+ * Pipeline: matn -> Action(lar) -> validator -> executor -> natija.
+ * Chaqiruvchi bu funksiyalarni UI oqimida emas, alohida Thread'da ishlatishi kerak.
  */
 class ActionExecutor(private val ctx: Context) {
     private val apps = AppRegistry.load(ctx)
@@ -25,6 +28,16 @@ class ActionExecutor(private val ctx: Context) {
 
     /** Tez, oflayn qoida asosidagi parser. Tushunmasa UNKNOWN qaytaradi. */
     fun plan(text: String): Action = CommandParser.parse(text, apps)
+
+    /** Bir nechta actionni ketma-ket bajaradi, birinchi xatoda to'xtaydi. */
+    fun executeSteps(steps: List<Action>): ActionResult {
+        var last = ActionResult(true, "")
+        for (step in steps) {
+            last = execute(step)
+            if (!last.ok) return last
+        }
+        return last
+    }
 
     fun execute(action: Action): ActionResult {
         val v = validator.validate(action)
@@ -70,15 +83,15 @@ class ActionExecutor(private val ctx: Context) {
                 else ActionResult(false, "Scroll qilib bo'lmadi.")
             ActionNames.OPEN_TELEGRAM_CHAT -> {
                 val name = action.params.getValue("name")
-                val openRes = openTelegramFirst()
-                if (!openRes.ok) return openRes
+                val opened = openTelegramFirst()
+                if (!opened.ok) return opened
                 describeTelegram(TelegramActions.openChat(name), name)
             }
             ActionNames.SEND_TELEGRAM_MESSAGE -> {
                 val name = action.params.getValue("name")
                 val msg = action.params.getValue("message")
-                val openRes = openTelegramFirst()
-                if (!openRes.ok) return openRes
+                val opened = openTelegramFirst()
+                if (!opened.ok) return opened
                 when (val r = TelegramActions.openChat(name)) {
                     is TelegramOutcome.Opened -> {
                         Thread.sleep(400)
@@ -98,20 +111,87 @@ class ActionExecutor(private val ctx: Context) {
             }
             ActionNames.CALL_CONTACT -> {
                 val name = action.params.getValue("name")
+                val hasContacts = ctx.checkSelfPermission(Manifest.permission.READ_CONTACTS) ==
+                    PackageManager.PERMISSION_GRANTED
+                if (!hasContacts) return ActionResult(false, "Bu amal uchun Kontaktlar (READ_CONTACTS) permission kerak.")
                 val matches = ContactsLookup.find(ctx, name)
-                val distinct = matches.map { it.name }.distinct()
-                when {
-                    matches.isEmpty() -> ActionResult(false, "\"$name\" nomli kontakt topilmadi.")
-                    distinct.size > 1 -> ActionResult(false, "Bir nechta mos kontakt topildi: ${distinct.joinToString(", ")}. Aniqroq ayting.")
-                    else -> placeCall(matches[0].number, matches[0].name)
+                if (matches.isEmpty()) return ActionResult(false, "\"$name\" nomli kontakt topilmadi.")
+                if (matches.size > 1) {
+                    return ActionResult(false, "Bir nechta mos kontakt topildi: ${matches.joinToString(", ") { it.name }}. Aniqroq nom ayting.")
+                }
+                placeCall(matches[0].number, matches[0].name)
+            }
+            ActionNames.CALL_NUMBER -> {
+                val number = action.params.getValue("number")
+                placeCall(number, number)
+            }
+            ActionNames.FIND_FILE -> {
+                if (!FileTools.hasAccess()) return ActionResult(false, "Bu amal uchun Fayllar (barcha fayllarga kirish) permission kerak.")
+                val name = action.params.getValue("name")
+                val f = FileTools.find(name) ?: return ActionResult(false, "\"$name\" nomli fayl topilmadi.")
+                ActionResult(true, "Topildi: ${f.name} (${f.parentFile?.name} papkasida)")
+            }
+            ActionNames.MOVE_FILE -> {
+                if (!FileTools.hasAccess()) return ActionResult(false, "Bu amal uchun Fayllar (barcha fayllarga kirish) permission kerak.")
+                val name = action.params.getValue("name")
+                val dest = action.params["dest"]
+                val f = FileTools.find(name) ?: return ActionResult(false, "\"$name\" nomli fayl topilmadi.")
+                val moved = FileTools.moveToDownloadSubfolder(f, dest)
+                    ?: return ActionResult(false, "Faylni ko'chirib bo'lmadi.")
+                val sub = if (dest.isNullOrBlank()) "" else "$dest/"
+                ActionResult(
+                    true,
+                    "\"${moved.name}\" ko'chirildi. Termux'da: ~/storage/downloads/$sub${moved.name}"
+                )
+            }
+            ActionNames.RENAME_FILE -> {
+                if (!FileTools.hasAccess()) return ActionResult(false, "Bu amal uchun Fayllar (barcha fayllarga kirish) permission kerak.")
+                val name = action.params.getValue("name")
+                val newName = action.params.getValue("new_name")
+                val f = FileTools.find(name) ?: return ActionResult(false, "\"$name\" nomli fayl topilmadi.")
+                val renamed = FileTools.rename(f, newName) ?: return ActionResult(false, "Nomini o'zgartirib bo'lmadi.")
+                ActionResult(true, "Fayl nomi \"${renamed.name}\" ga o'zgartirildi.")
+            }
+            ActionNames.RUN_TERMUX -> {
+                val command = action.params.getValue("command")
+                val r = TermuxBridge.run(ctx, command)
+                if (!r.ranAtAll) ActionResult(false, r.stderr.ifBlank { "Termux bilan bog'lanib bo'lmadi." })
+                else if (r.exitCode == 0) {
+                    val out = r.stdout.trim().takeLast(300).ifBlank { "(chiqish yo'q)" }
+                    ActionResult(true, "Bajarildi. Natija: $out")
+                } else {
+                    val err = r.stderr.trim().takeLast(300).ifBlank { r.stdout.trim().takeLast(300) }
+                    ActionResult(false, "Xato (kod ${r.exitCode}): ${err.ifBlank { "noma'lum xato" }}")
                 }
             }
-            ActionNames.CALL_NUMBER -> placeCall(action.params.getValue("number"), action.params.getValue("number"))
+            ActionNames.OPEN_CLAUDE_WITH_TEXT -> {
+                val text = action.params.getValue("text")
+                val claude = apps.firstOrNull { it.id == "claude" }
+                    ?: return ActionResult(false, "Claude ilovasi ro'yxatda yo'q.")
+                val opened = openApp(claude)
+                if (!opened.ok) return opened
+                if (ClaudeActions.sendText(text)) ActionResult(true, "Claude'ga matn yuborildi.")
+                else ActionResult(false, "Claude'ga matn yuborib bo'lmadi.")
+            }
             else -> ActionResult(false, "Noma'lum action.")
         }
     }
 
-    /** Telegram'ni oldindan ochib, foreground bo'lishini kutadi. */
+    private fun placeCall(number: String, label: String): ActionResult {
+        val hasCallPermission = ctx.checkSelfPermission(Manifest.permission.CALL_PHONE) ==
+            PackageManager.PERMISSION_GRANTED
+        val intentAction = if (hasCallPermission) Intent.ACTION_CALL else Intent.ACTION_DIAL
+        return try {
+            val i = Intent(intentAction, Uri.parse("tel:" + Uri.encode(number)))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(i)
+            if (hasCallPermission) ActionResult(true, "$label ga qo'ng'iroq qilinmoqda.")
+            else ActionResult(true, "Terish ekrani ochildi. Qo'ng'iroq qilish uchun qo'lda bosing (ruxsat berilmagan).")
+        } catch (e: Exception) {
+            ActionResult(false, "Qo'ng'iroq qilib bo'lmadi.")
+        }
+    }
+
     private fun openTelegramFirst(): ActionResult {
         val telegram = apps.firstOrNull { it.id == "telegram" }
             ?: return ActionResult(false, "Telegram ilovasi ro'yxatda yo'q.")
@@ -127,19 +207,6 @@ class ActionExecutor(private val ctx: Context) {
             ActionResult(false, "Bir nechta mos chat topildi: ${outcome.options.joinToString(", ")}. Aniqroq nom ayting.")
         TelegramOutcome.NotFound -> ActionResult(false, "\"$name\" nomli chat topilmadi.")
         TelegramOutcome.NoAccessibility -> ActionResult(false, "Bu amal uchun Accessibility permission kerak.")
-    }
-
-    private fun placeCall(number: String, label: String): ActionResult {
-        return try {
-            val i = Intent(Intent.ACTION_CALL, Uri.parse("tel:" + Uri.encode(number)))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            ctx.startActivity(i)
-            ActionResult(true, "$label'ga qo'ng'iroq qilinmoqda.")
-        } catch (e: SecurityException) {
-            ActionResult(false, "Qo'ng'iroq qilish ruxsati yo'q.")
-        } catch (e: Exception) {
-            ActionResult(false, "Qo'ng'iroq qilib bo'lmadi: ${e.message}")
-        }
     }
 
     private fun openApp(entry: AppEntry): ActionResult {

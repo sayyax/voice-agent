@@ -25,6 +25,11 @@ object ActionNames {
     const val SEND_TELEGRAM_MESSAGE = "send_telegram_message"
     const val CALL_CONTACT = "call_contact"
     const val CALL_NUMBER = "call_number"
+    const val FIND_FILE = "find_file"
+    const val MOVE_FILE = "move_file"
+    const val RENAME_FILE = "rename_file"
+    const val RUN_TERMUX = "run_termux"
+    const val OPEN_CLAUDE_WITH_TEXT = "open_claude_with_text"
     const val CLARIFY = "clarify"
     const val UNKNOWN = "unknown"
 
@@ -34,18 +39,20 @@ object ActionNames {
         PRESS_BACK, PRESS_HOME, PRESS_RECENTS,
         CLICK_TEXT, TYPE_TEXT, SCROLL_DOWN, SCROLL_UP,
         OPEN_TELEGRAM_CHAT, SEND_TELEGRAM_MESSAGE,
-        CALL_CONTACT, CALL_NUMBER
+        CALL_CONTACT, CALL_NUMBER,
+        FIND_FILE, MOVE_FILE, RENAME_FILE, RUN_TERMUX,
+        OPEN_CLAUDE_WITH_TEXT
     )
 
     /** Accessibility ruxsati yoqilgan bo'lishi shart bo'lgan actionlar. */
     val needsAccessibility = setOf(
         PRESS_BACK, PRESS_HOME, PRESS_RECENTS, CLICK_TEXT, TYPE_TEXT, SCROLL_DOWN, SCROLL_UP,
-        OPEN_TELEGRAM_CHAT, SEND_TELEGRAM_MESSAGE
+        OPEN_TELEGRAM_CHAT, SEND_TELEGRAM_MESSAGE, OPEN_CLAUDE_WITH_TEXT
     )
 
     /** Bajarishdan oldin foydalanuvchidan ovozli tasdiq so'raladigan actionlar. */
-    val needsConfirmation = setOf(SEND_TELEGRAM_MESSAGE, CALL_CONTACT, CALL_NUMBER)
-
-    /** CALL_PHONE / READ_CONTACTS ruxsati kerak bo'lgan actionlar. */
-    val needsCallPermission = setOf(CALL_CONTACT, CALL_NUMBER)
+    val needsConfirmation = setOf(
+        SEND_TELEGRAM_MESSAGE, CALL_CONTACT, CALL_NUMBER,
+        MOVE_FILE, RENAME_FILE, RUN_TERMUX
+    )
 }

@@ -6,6 +6,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.inputmethod.EditorInfo
@@ -19,6 +21,7 @@ import uz.agent.voice.agent.tools.Action
 import uz.agent.voice.agent.tools.ActionExecutor
 import uz.agent.voice.agent.tools.ActionNames
 import uz.agent.voice.android.accessibility.AgentAccessibilityService
+import uz.agent.voice.android.files.FileTools
 import uz.agent.voice.config.Prefs
 import uz.agent.voice.llm.GeminiProvider
 import uz.agent.voice.llm.LLMPlan
@@ -44,8 +47,7 @@ class MainActivity : Activity() {
     private lateinit var input: EditText
     private lateinit var micButton: Button
     private var listening = false
-    private var pendingConfirm: Action? = null
-    private var pendingPermissionAction: Action? = null
+    private var pendingSteps: List<Action>? = null
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -101,7 +103,7 @@ class MainActivity : Activity() {
         permissionView = label("").also { root.addView(it) }
 
         input = EditText(this).apply {
-            hint = "Masalan: Ali'ga qo'ng'iroq qil"
+            hint = "Masalan: bot.py faylini top va Termuxda ishga tushir"
             setSingleLine(true)
             imeOptions = EditorInfo.IME_ACTION_DONE
             setOnEditorActionListener { _, id, _ ->
@@ -128,9 +130,22 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         root.addView(row)
 
-        root.addView(Button(this).apply {
-            text = "Accessibility ruxsatini ochish"
+        val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row2.addView(Button(this).apply {
+            text = "Accessibility"
             setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        row2.addView(Button(this).apply {
+            text = "Qo'ng'iroq ruxsati"
+            setOnClickListener { ensureCallPermissions() }
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        root.addView(row2, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(4) })
+
+        root.addView(Button(this).apply {
+            text = "Fayllar ruxsatini ochish"
+            setOnClickListener { openFilePermissionSettings() }
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(4) })
@@ -168,30 +183,50 @@ class MainActivity : Activity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         refreshPermissions()
-        when (requestCode) {
-            1 -> if (hasMic()) startListening() else log("XATO Mikrofon ruxsati berilmadi.")
-            2 -> {
-                val pending = pendingPermissionAction
-                pendingPermissionAction = null
-                if (hasCallPerms() && pending != null) perform(pending)
-                else if (pending != null) report(false, "Qo'ng'iroq ruxsati berilmadi.")
-            }
+        if (requestCode == 1) {
+            if (hasMic()) startListening() else log("XATO Mikrofon ruxsati berilmadi.")
         }
     }
 
     private fun hasMic() =
         checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
-    private fun hasCallPerms() =
-        checkSelfPermission(Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED &&
-            checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+    private fun hasContacts() =
+        checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+
+    private fun hasCallPhone() =
+        checkSelfPermission(Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
+
+    private fun ensureCallPermissions() {
+        val need = mutableListOf<String>()
+        if (!hasContacts()) need += Manifest.permission.READ_CONTACTS
+        if (!hasCallPhone()) need += Manifest.permission.CALL_PHONE
+        if (need.isNotEmpty()) requestPermissions(need.toTypedArray(), 2)
+    }
+
+    private fun openFilePermissionSettings() {
+        try {
+            val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Intent(
+                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+            } else {
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            log("XATO Fayl ruxsati sozlamasini ochib bo'lmadi: ${e.message}")
+        }
+    }
 
     private fun refreshPermissions() {
-        val llm = if (Prefs.geminiKey(this) != null) "Gemini kaliti bor" else "Gemini kaliti yo'q"
+        val llm = if (Prefs.geminiKey(this) != null) "Gemini bor" else "Gemini yo'q"
         val acc = if (AgentAccessibilityService.isEnabled()) "yoqilgan" else "o'chiq"
-        val call = if (hasCallPerms()) "berilgan" else "berilmagan"
-        permissionView.text = "Mikrofon: " + (if (hasMic()) "berilgan" else "berilmagan") +
-            " | Qo'ng'iroq: $call | LLM: $llm | Accessibility: $acc"
+        val calls = if (hasContacts() && hasCallPhone()) "bor" else "yo'q"
+        val files = if (FileTools.hasAccess()) "bor" else "yo'q"
+        permissionView.text = "Mikrofon: " + (if (hasMic()) "bor" else "yo'q") +
+            " | LLM: $llm | Accessibility: $acc | Qo'ng'iroq: $calls | Fayllar: $files"
     }
 
     private fun toggleMic() {
@@ -229,18 +264,18 @@ class MainActivity : Activity() {
         if (text.isEmpty()) return
         lastCommandView.text = "Oxirgi buyruq: $text"
 
-        val pending = pendingConfirm
+        val pending = pendingSteps
         if (pending != null) {
             when (CommandParser.parseYesNo(text)) {
-                true -> { pendingConfirm = null; perform(pending); return }
-                false -> { pendingConfirm = null; report(true, "Bekor qilindi."); return }
+                true -> { pendingSteps = null; performSteps(pending); return }
+                false -> { pendingSteps = null; report(true, "Bekor qilindi."); return }
                 null -> { report(false, "Tushunmadim. \"Ha\" yoki \"yo'q\" deng."); return }
             }
         }
 
         val local = executor.plan(text)
         if (local.name != ActionNames.UNKNOWN) {
-            maybeConfirmThenPerform(local)
+            performSteps(listOf(local))
             return
         }
         val key = Prefs.geminiKey(this)
@@ -262,51 +297,52 @@ class MainActivity : Activity() {
             report(false, plan.error)
             return
         }
-        val action = plan.action
-        if (action == null || action.name == ActionNames.UNKNOWN) {
+        val steps = plan.steps
+        if (steps.isEmpty() || (steps.size == 1 && steps[0].name == ActionNames.UNKNOWN)) {
             report(false, plan.say ?: "Buyruqni tushunmadim.")
             return
         }
-        if (action.name == ActionNames.CLARIFY) {
+        if (steps.size == 1 && steps[0].name == ActionNames.CLARIFY) {
             val q = plan.say ?: "Buyruqni aniqroq ayting."
             statusView.text = "Holat: tayyor"
             log("AGENT $q")
             tts.speak(q)
             return
         }
-        maybeConfirmThenPerform(action)
-    }
-
-    private fun maybeConfirmThenPerform(action: Action) {
-        if (action.name in ActionNames.needsConfirmation) {
-            pendingConfirm = action
-            val q = confirmationText(action)
+        if (steps.any { it.name == ActionNames.CALL_CONTACT || it.name == ActionNames.CALL_NUMBER }) {
+            ensureCallPermissions()
+        }
+        if (steps.any { it.name in ActionNames.needsConfirmation }) {
+            pendingSteps = steps
+            val q = confirmQuestionForSteps(steps)
             statusView.text = "Holat: tasdiq kutilmoqda"
             log("AGENT $q")
             tts.speak(q)
             return
         }
-        perform(action)
+        performSteps(steps)
     }
 
-    private fun confirmationText(action: Action): String = when (action.name) {
-        ActionNames.SEND_TELEGRAM_MESSAGE ->
-            "\"${action.params["name"]}\"ga \"${action.params["message"]}\" deb yuboraymi?"
-        ActionNames.CALL_CONTACT -> "${action.params["name"]}'ga qo'ng'iroq qilaymi?"
-        ActionNames.CALL_NUMBER -> "${action.params["number"]} raqamiga qo'ng'iroq qilaymi?"
-        else -> "Shuni bajaraymi?"
+    private fun describeStep(a: Action): String = when (a.name) {
+        ActionNames.OPEN_APP -> "\"${a.params["app"]}\" ilovasini ochish"
+        ActionNames.FIND_FILE -> "\"${a.params["name"]}\" faylini topish"
+        ActionNames.MOVE_FILE -> "\"${a.params["name"]}\" faylini ko'chirish"
+        ActionNames.RENAME_FILE -> "\"${a.params["name"]}\" faylini qayta nomlash"
+        ActionNames.RUN_TERMUX -> "Termux'da \"${a.params["command"]}\" ni bajarish"
+        ActionNames.SEND_TELEGRAM_MESSAGE -> "\"${a.params["name"]}\"ga xabar yuborish"
+        ActionNames.CALL_CONTACT -> "\"${a.params["name"]}\"ga qo'ng'iroq qilish"
+        ActionNames.CALL_NUMBER -> "\"${a.params["number"]}\"ga qo'ng'iroq qilish"
+        else -> a.name
     }
 
-    private fun perform(action: Action) {
-        if (action.name in ActionNames.needsCallPermission && !hasCallPerms()) {
-            pendingPermissionAction = action
-            requestPermissions(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_CONTACTS), 2)
-            return
-        }
-        lastActionView.text = "Oxirgi action: $action"
+    private fun confirmQuestionForSteps(steps: List<Action>): String =
+        steps.joinToString(", keyin ") { describeStep(it) } + ". Davom etaymi?"
+
+    private fun performSteps(steps: List<Action>) {
+        lastActionView.text = "Oxirgi action: " + steps.joinToString(" -> ")
         statusView.text = "Holat: bajarilmoqda"
         Thread {
-            val result = executor.execute(action)
+            val result = executor.executeSteps(steps)
             runOnUiThread { report(result.ok, result.message) }
         }.start()
     }

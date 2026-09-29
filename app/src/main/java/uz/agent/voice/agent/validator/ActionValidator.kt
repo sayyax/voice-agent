@@ -53,8 +53,28 @@ class ActionValidator(private val apps: List<AppEntry>) {
                 else Validation(true)
             }
             ActionNames.CALL_NUMBER -> {
-                val n = action.params["number"]
-                if (n.isNullOrBlank() || n.count { it.isDigit() } < 5) Validation(false, "Qaysi raqamga qo'ng'iroq qilish kerak?")
+                if (action.params["number"].isNullOrBlank()) Validation(false, "Qaysi raqamga qo'ng'iroq qilish kerak?")
+                else Validation(true)
+            }
+            ActionNames.FIND_FILE -> {
+                if (action.params["name"].isNullOrBlank()) Validation(false, "Qaysi faylni qidirish kerak?")
+                else Validation(true)
+            }
+            ActionNames.MOVE_FILE -> {
+                if (action.params["name"].isNullOrBlank()) Validation(false, "Qaysi faylni ko'chirish kerak?")
+                else Validation(true)
+            }
+            ActionNames.RENAME_FILE -> {
+                if (action.params["name"].isNullOrBlank()) Validation(false, "Qaysi faylni nomini o'zgartirish kerak?")
+                else if (action.params["new_name"].isNullOrBlank()) Validation(false, "Yangi nomi qanday bo'lsin?")
+                else Validation(true)
+            }
+            ActionNames.RUN_TERMUX -> {
+                if (action.params["command"].isNullOrBlank()) Validation(false, "Qaysi komandani bajarish kerak?")
+                else Validation(true)
+            }
+            ActionNames.OPEN_CLAUDE_WITH_TEXT -> {
+                if (action.params["text"].isNullOrBlank()) Validation(false, "Claude'ga nima yozish kerak?")
                 else Validation(true)
             }
             ActionNames.PRESS_BACK, ActionNames.PRESS_HOME, ActionNames.PRESS_RECENTS,

@@ -87,13 +87,21 @@ class GeminiProvider(
             val raw = sb.toString().trim()
                 .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
             val o = JSONObject(raw)
-            val name = o.optString("action", ActionNames.UNKNOWN)
             val say = o.optString("say", "").ifBlank { null }
-            val params = mutableMapOf<String, String>()
-            o.optJSONObject("params")?.let { po ->
-                po.keys().forEach { k -> params[k] = po.optString(k, "") }
+            val stepsArr = o.optJSONArray("steps")
+            val steps = mutableListOf<Action>()
+            if (stepsArr != null) {
+                for (i in 0 until stepsArr.length()) {
+                    val so = stepsArr.getJSONObject(i)
+                    val name = so.optString("action", ActionNames.UNKNOWN)
+                    val params = mutableMapOf<String, String>()
+                    so.optJSONObject("params")?.let { po ->
+                        po.keys().forEach { k -> params[k] = po.optString(k, "") }
+                    }
+                    steps.add(Action(name, params))
+                }
             }
-            LLMPlan(action = Action(name, params), say = say)
+            LLMPlan(steps = steps, say = say)
         } catch (e: Exception) {
             LLMPlan(error = "LLM javobini o'qib bo'lmadi.")
         }
@@ -102,28 +110,39 @@ class GeminiProvider(
     private fun systemPrompt(appIds: List<String>): String = """
 You are the intent parser of an Uzbek voice assistant running on an Android phone.
 The user speaks Uzbek (sometimes mixed with Russian or English). The text comes from speech recognition, so it may contain spelling mistakes; be tolerant.
-Convert the user's command into exactly ONE JSON object and output nothing else.
+Convert the user's command into exactly ONE JSON object of the form {"steps":[...],"say":"..."} and output nothing else.
+"steps" is an array of one or more action objects, each {"action":"<name>","params":{...}}, executed in order. Most commands need only one step.
 
-Allowed actions:
-- {"action":"open_app","params":{"app":"<id>"}}  where <id> is one of: ${appIds.joinToString(", ")}
-- {"action":"open_url","params":{"url":"https://..."}}  (url must start with https://; for example "Google'ga kir" -> https://www.google.com)
-- {"action":"search_youtube","params":{"query":"<search text>"}}
-- {"action":"press_back"} / {"action":"press_home"} / {"action":"press_recents"}
-- {"action":"click_text","params":{"text":"<visible text of the button/element on the CURRENT screen>"}}
-- {"action":"type_text","params":{"text":"<text to type into the currently focused input field>"}}
-- {"action":"scroll_down"} / {"action":"scroll_up"}
-- {"action":"open_telegram_chat","params":{"name":"<chat or group name>"}}  for requests like "Telegramdagi X guruhini och" / "X chatiga kir"
-- {"action":"send_telegram_message","params":{"name":"<chat or group name>","message":"<message text>"}}  for requests like "X'ga mana shu xabarni yubor: ..." / "X'ga yoz: ..."
-- {"action":"call_contact","params":{"name":"<contact name>"}}  for requests like "Ali'ga qo'ng'iroq qil" / "Onamga telefon qil"
-- {"action":"call_number","params":{"number":"<digits only>"}}  only when the user says an actual phone number
-- {"action":"clarify","say":"<one short Uzbek question>"}  when the command is ambiguous or a needed detail is missing
-- {"action":"unknown","say":"Bu buyruqni hali bajara olmayman."}  when the command is none of the above (file management, Termux commands are not supported yet)
+Available actions:
+- open_app {app:"<id>"}  where <id> is one of: ${appIds.joinToString(", ")}
+- open_url {url:"https://..."}
+- search_youtube {query:"<text>"}
+- press_back / press_home / press_recents  (no params)
+- click_text {text:"<visible text on the CURRENT screen>"}
+- type_text {text:"<text to type into the focused field>"}
+- scroll_down / scroll_up  (no params)
+- open_telegram_chat {name:"<chat or group name>"}
+- send_telegram_message {name:"<chat or group name>", message:"<text>"}
+- call_contact {name:"<contact name as said, e.g. Ali, Onam>"}
+- call_number {number:"<digits only>"}
+- find_file {name:"<part of file name>"}  (searches Download/Documents/DCIM/Pictures)
+- move_file {name:"<part of file name>", dest:"<optional subfolder name under Download, empty for Download root>"}
+- rename_file {name:"<part of file name>", new_name:"<new file name with extension>"}
+- run_termux {command:"<shell command to run inside Termux>"}
+- open_claude_with_text {text:"<text to send to the Claude app>"}
+- clarify  with top-level "say" set to one short Uzbek question — when the command is ambiguous or a needed detail is missing
+- unknown  with top-level "say" set to a short Uzbek explanation — when the command is none of the above
+
+Chaining rule: for a compound request like "Claude bergan faylni Termuxga joyla va ishga tushir" (find a file, then move it, then run it), output multiple steps in order, e.g.:
+{"steps":[{"action":"find_file","params":{"name":"..."}},{"action":"move_file","params":{"name":"...","dest":""}},{"action":"run_termux","params":{"command":"cd ~/storage/downloads && python ..."}}]}
+Only chain steps when the user's single utterance clearly describes multiple sequential actions; otherwise output one step.
 
 Rules:
 - Never invent app ids. If the app is not in the list, use unknown.
-- click_text and type_text only affect the screen the phone is already showing; do not use them to plan multi-step tasks other than what open_telegram_chat/send_telegram_message already cover.
-- For send_telegram_message, call_contact and call_number, never add a "confirmed" param yourself — the app always asks the user to confirm before sending or calling.
-- "say" is optional and must be short, natural Uzbek (Latin script).
+- click_text and type_text only affect the screen the phone is already showing.
+- For send_telegram_message, call_contact, call_number, move_file, rename_file and run_termux, never add a "confirmed" param yourself — the app always asks the user to confirm before doing these.
+- run_termux commands must be exactly what should run in bash, nothing else added.
+- "say" is optional (used mainly with clarify/unknown) and must be short, natural Uzbek (Latin script).
 - Output valid JSON only, no markdown.
 """.trimIndent()
 }

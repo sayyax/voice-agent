@@ -2,9 +2,9 @@ package uz.agent.voice.llm
 
 import uz.agent.voice.agent.tools.Action
 
-/** LLM natijasi: action, foydalanuvchiga aytiladigan matn (say) yoki xato. */
+/** LLM natijasi: bir nechta ketma-ket action (steps), foydalanuvchiga aytiladigan matn (say) yoki xato. */
 data class LLMPlan(
-    val action: Action? = null,
+    val steps: List<Action> = emptyList(),
     val say: String? = null,
     val error: String? = null
 )
