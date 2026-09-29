@@ -48,6 +48,15 @@ class ActionValidator(private val apps: List<AppEntry>) {
                 else if (action.params["message"].isNullOrBlank()) Validation(false, "Nima deb yozish kerak?")
                 else Validation(true)
             }
+            ActionNames.CALL_CONTACT -> {
+                if (action.params["name"].isNullOrBlank()) Validation(false, "Kimga qo'ng'iroq qilish kerak?")
+                else Validation(true)
+            }
+            ActionNames.CALL_NUMBER -> {
+                val n = action.params["number"]
+                if (n.isNullOrBlank() || n.count { it.isDigit() } < 5) Validation(false, "Qaysi raqamga qo'ng'iroq qilish kerak?")
+                else Validation(true)
+            }
             ActionNames.PRESS_BACK, ActionNames.PRESS_HOME, ActionNames.PRESS_RECENTS,
             ActionNames.SCROLL_DOWN, ActionNames.SCROLL_UP -> Validation(true)
             else -> Validation(false, "Noma'lum action.")

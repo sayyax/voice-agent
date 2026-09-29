@@ -11,20 +11,40 @@ sealed class TelegramOutcome {
 
 /**
  * Telegram'da chat/guruh qidirish va ochish. Accessibility Service orqali ishlaydi,
- * Telegram interfeysi tilidan qat'i nazar (uz/ru/en) bir nechta so'z variantini sinaydi.
- * Bu — coordinate emas, ekrandagi matn/element asosidagi avtomatlashtirish.
+ * Telegram interfeysi tilidan qat'i nazar (uz/ru/en) bir nechta so'z va texnik id
+ * variantini sinaydi, shuning uchun tugma nomi lokalizatsiyaga qarab farq qilsa ham ishlaydi.
  */
 object TelegramActions {
+
+    private val searchWords = arrayOf(
+        "search", "qidiruv", "qidirish", "qidir", "izlash", "izla",
+        "поиск", "найти", "искать"
+    )
+    private val searchIds = arrayOf("search", "action_search", "menu_search")
+
+    private val sendWords = arrayOf(
+        "send", "yubor", "yuborish", "jonat", "junat", "жонат",
+        "отправить", "отправка", "отправление"
+    )
+    private val sendIds = arrayOf("send", "chat_send", "action_send", "button_send")
+
+    private fun clickSearchIcon(): Boolean =
+        AgentAccessibilityService.clickByCandidates(*searchWords) ||
+            AgentAccessibilityService.clickByIdContains(*searchIds)
+
+    fun clickSend(): Boolean =
+        AgentAccessibilityService.clickByCandidates(*sendWords) ||
+            AgentAccessibilityService.clickByIdContains(*sendIds)
 
     fun openChat(query: String): TelegramOutcome {
         if (!AgentAccessibilityService.isEnabled()) return TelegramOutcome.NoAccessibility
 
-        AgentAccessibilityService.clickByCandidates("search", "qidiruv", "поиск")
+        clickSearchIcon()
         Thread.sleep(500)
 
         var typed = AgentAccessibilityService.typeText(query)
         if (!typed) {
-            AgentAccessibilityService.clickByCandidates("search", "qidiruv", "поиск")
+            clickSearchIcon()
             Thread.sleep(400)
             typed = AgentAccessibilityService.typeText(query)
         }

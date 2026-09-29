@@ -9,6 +9,7 @@ import uz.agent.voice.android.accessibility.AgentAccessibilityService
 import uz.agent.voice.android.apps.AppEntry
 import uz.agent.voice.android.apps.AppOpener
 import uz.agent.voice.android.apps.AppRegistry
+import uz.agent.voice.android.contacts.ContactsLookup
 
 /**
  * Pipeline: matn -> Action -> validator -> executor -> natija.
@@ -69,14 +70,14 @@ class ActionExecutor(private val ctx: Context) {
                 else ActionResult(false, "Scroll qilib bo'lmadi.")
             ActionNames.OPEN_TELEGRAM_CHAT -> {
                 val name = action.params.getValue("name")
-                val opened = openTelegramFirst(name)
-                if (opened.ok) opened else return opened
-                describeTelegram(TelegramActions.openChat(name).let { it }, name)
+                val openRes = openTelegramFirst()
+                if (!openRes.ok) return openRes
+                describeTelegram(TelegramActions.openChat(name), name)
             }
             ActionNames.SEND_TELEGRAM_MESSAGE -> {
                 val name = action.params.getValue("name")
                 val msg = action.params.getValue("message")
-                val openRes = openTelegramFirst(name)
+                val openRes = openTelegramFirst()
                 if (!openRes.ok) return openRes
                 when (val r = TelegramActions.openChat(name)) {
                     is TelegramOutcome.Opened -> {
@@ -85,8 +86,7 @@ class ActionExecutor(private val ctx: Context) {
                             ActionResult(false, "Xabar matnini kiritolmadim.")
                         } else {
                             Thread.sleep(300)
-                            val sent = AgentAccessibilityService.clickByCandidates("send", "yubor", "отправить")
-                            if (sent) ActionResult(true, "\"${r.name}\"ga xabar yuborildi.")
+                            if (TelegramActions.clickSend()) ActionResult(true, "\"${r.name}\"ga xabar yuborildi.")
                             else ActionResult(false, "Yuborish tugmasini topolmadim.")
                         }
                     }
@@ -96,12 +96,23 @@ class ActionExecutor(private val ctx: Context) {
                     TelegramOutcome.NoAccessibility -> ActionResult(false, "Bu amal uchun Accessibility permission kerak.")
                 }
             }
+            ActionNames.CALL_CONTACT -> {
+                val name = action.params.getValue("name")
+                val matches = ContactsLookup.find(ctx, name)
+                val distinct = matches.map { it.name }.distinct()
+                when {
+                    matches.isEmpty() -> ActionResult(false, "\"$name\" nomli kontakt topilmadi.")
+                    distinct.size > 1 -> ActionResult(false, "Bir nechta mos kontakt topildi: ${distinct.joinToString(", ")}. Aniqroq ayting.")
+                    else -> placeCall(matches[0].number, matches[0].name)
+                }
+            }
+            ActionNames.CALL_NUMBER -> placeCall(action.params.getValue("number"), action.params.getValue("number"))
             else -> ActionResult(false, "Noma'lum action.")
         }
     }
 
     /** Telegram'ni oldindan ochib, foreground bo'lishini kutadi. */
-    private fun openTelegramFirst(name: String): ActionResult {
+    private fun openTelegramFirst(): ActionResult {
         val telegram = apps.firstOrNull { it.id == "telegram" }
             ?: return ActionResult(false, "Telegram ilovasi ro'yxatda yo'q.")
         val res = openApp(telegram)
@@ -116,6 +127,19 @@ class ActionExecutor(private val ctx: Context) {
             ActionResult(false, "Bir nechta mos chat topildi: ${outcome.options.joinToString(", ")}. Aniqroq nom ayting.")
         TelegramOutcome.NotFound -> ActionResult(false, "\"$name\" nomli chat topilmadi.")
         TelegramOutcome.NoAccessibility -> ActionResult(false, "Bu amal uchun Accessibility permission kerak.")
+    }
+
+    private fun placeCall(number: String, label: String): ActionResult {
+        return try {
+            val i = Intent(Intent.ACTION_CALL, Uri.parse("tel:" + Uri.encode(number)))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ctx.startActivity(i)
+            ActionResult(true, "$label'ga qo'ng'iroq qilinmoqda.")
+        } catch (e: SecurityException) {
+            ActionResult(false, "Qo'ng'iroq qilish ruxsati yo'q.")
+        } catch (e: Exception) {
+            ActionResult(false, "Qo'ng'iroq qilib bo'lmadi: ${e.message}")
+        }
     }
 
     private fun openApp(entry: AppEntry): ActionResult {

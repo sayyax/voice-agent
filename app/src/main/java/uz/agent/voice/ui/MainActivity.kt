@@ -45,6 +45,7 @@ class MainActivity : Activity() {
     private lateinit var micButton: Button
     private var listening = false
     private var pendingConfirm: Action? = null
+    private var pendingPermissionAction: Action? = null
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -100,7 +101,7 @@ class MainActivity : Activity() {
         permissionView = label("").also { root.addView(it) }
 
         input = EditText(this).apply {
-            hint = "Masalan: Telegramdagi X guruhini och"
+            hint = "Masalan: Ali'ga qo'ng'iroq qil"
             setSingleLine(true)
             imeOptions = EditorInfo.IME_ACTION_DONE
             setOnEditorActionListener { _, id, _ ->
@@ -167,17 +168,30 @@ class MainActivity : Activity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         refreshPermissions()
-        if (hasMic()) startListening() else log("XATO Mikrofon ruxsati berilmadi.")
+        when (requestCode) {
+            1 -> if (hasMic()) startListening() else log("XATO Mikrofon ruxsati berilmadi.")
+            2 -> {
+                val pending = pendingPermissionAction
+                pendingPermissionAction = null
+                if (hasCallPerms() && pending != null) perform(pending)
+                else if (pending != null) report(false, "Qo'ng'iroq ruxsati berilmadi.")
+            }
+        }
     }
 
     private fun hasMic() =
         checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
+    private fun hasCallPerms() =
+        checkSelfPermission(Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+
     private fun refreshPermissions() {
         val llm = if (Prefs.geminiKey(this) != null) "Gemini kaliti bor" else "Gemini kaliti yo'q"
         val acc = if (AgentAccessibilityService.isEnabled()) "yoqilgan" else "o'chiq"
+        val call = if (hasCallPerms()) "berilgan" else "berilmagan"
         permissionView.text = "Mikrofon: " + (if (hasMic()) "berilgan" else "berilmagan") +
-            " | LLM: $llm | Accessibility: $acc"
+            " | Qo'ng'iroq: $call | LLM: $llm | Accessibility: $acc"
     }
 
     private fun toggleMic() {
@@ -226,7 +240,7 @@ class MainActivity : Activity() {
 
         val local = executor.plan(text)
         if (local.name != ActionNames.UNKNOWN) {
-            perform(local)
+            maybeConfirmThenPerform(local)
             return
         }
         val key = Prefs.geminiKey(this)
@@ -260,9 +274,13 @@ class MainActivity : Activity() {
             tts.speak(q)
             return
         }
+        maybeConfirmThenPerform(action)
+    }
+
+    private fun maybeConfirmThenPerform(action: Action) {
         if (action.name in ActionNames.needsConfirmation) {
             pendingConfirm = action
-            val q = "\"${action.params["name"]}\"ga \"${action.params["message"]}\" deb yuboraymi?"
+            val q = confirmationText(action)
             statusView.text = "Holat: tasdiq kutilmoqda"
             log("AGENT $q")
             tts.speak(q)
@@ -271,7 +289,20 @@ class MainActivity : Activity() {
         perform(action)
     }
 
+    private fun confirmationText(action: Action): String = when (action.name) {
+        ActionNames.SEND_TELEGRAM_MESSAGE ->
+            "\"${action.params["name"]}\"ga \"${action.params["message"]}\" deb yuboraymi?"
+        ActionNames.CALL_CONTACT -> "${action.params["name"]}'ga qo'ng'iroq qilaymi?"
+        ActionNames.CALL_NUMBER -> "${action.params["number"]} raqamiga qo'ng'iroq qilaymi?"
+        else -> "Shuni bajaraymi?"
+    }
+
     private fun perform(action: Action) {
+        if (action.name in ActionNames.needsCallPermission && !hasCallPerms()) {
+            pendingPermissionAction = action
+            requestPermissions(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_CONTACTS), 2)
+            return
+        }
         lastActionView.text = "Oxirgi action: $action"
         statusView.text = "Holat: bajarilmoqda"
         Thread {

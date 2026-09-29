@@ -20,6 +20,7 @@ object CommandParser {
     private val recentsWords = setOf("songi ilovalar", "oxirgi ilovalar", "recent apps")
     private val yesWords = setOf("ha", "xa", "mayli", "boladi", "ok", "yubor", "yuboraver")
     private val noWords = setOf("yoq", "kerak emas", "bekor", "bekor qil", "toxta")
+    private val callWords = setOf("qongiroq", "telefon qil", "qorngiroq")
 
     private fun toLatin(s: String): String {
         val sb = StringBuilder()
@@ -42,7 +43,7 @@ object CommandParser {
         return null
     }
 
-    /** Faqat qisqa, aniq buyruqlar. Murakkab/uzun gaplar LLM'ga beriladi. */
+    /** Faqat qisqa, aniq buyruqlar. Murakkab/uzun gaplar (masalan nomga qo'ng'iroq) LLM'ga beriladi. */
     fun parse(text: String, apps: List<AppEntry>): Action {
         val t = normalize(text)
         if (t.isEmpty()) return Action(ActionNames.UNKNOWN)
@@ -50,6 +51,12 @@ object CommandParser {
         if (t in backWords) return Action(ActionNames.PRESS_BACK)
         if (t in homeWords) return Action(ActionNames.PRESS_HOME)
         if (t in recentsWords) return Action(ActionNames.PRESS_RECENTS)
+
+        // Aniq telefon raqamiga qo'ng'iroq (masalan "998901234567ga qongiroq qil") - internetsiz ham ishlaydi.
+        val digits = Regex("\\d{7,}").find(text)?.value
+        if (digits != null && callWords.any { t.contains(it) }) {
+            return Action(ActionNames.CALL_NUMBER, mapOf("number" to digits))
+        }
 
         val words = t.split(" ")
         if (words.size > 4) return Action(ActionNames.UNKNOWN)

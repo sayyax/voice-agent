@@ -23,6 +23,8 @@ object ActionNames {
     const val SCROLL_UP = "scroll_up"
     const val OPEN_TELEGRAM_CHAT = "open_telegram_chat"
     const val SEND_TELEGRAM_MESSAGE = "send_telegram_message"
+    const val CALL_CONTACT = "call_contact"
+    const val CALL_NUMBER = "call_number"
     const val CLARIFY = "clarify"
     const val UNKNOWN = "unknown"
 
@@ -31,7 +33,8 @@ object ActionNames {
         OPEN_APP, OPEN_URL, SEARCH_YOUTUBE,
         PRESS_BACK, PRESS_HOME, PRESS_RECENTS,
         CLICK_TEXT, TYPE_TEXT, SCROLL_DOWN, SCROLL_UP,
-        OPEN_TELEGRAM_CHAT, SEND_TELEGRAM_MESSAGE
+        OPEN_TELEGRAM_CHAT, SEND_TELEGRAM_MESSAGE,
+        CALL_CONTACT, CALL_NUMBER
     )
 
     /** Accessibility ruxsati yoqilgan bo'lishi shart bo'lgan actionlar. */
@@ -41,5 +44,8 @@ object ActionNames {
     )
 
     /** Bajarishdan oldin foydalanuvchidan ovozli tasdiq so'raladigan actionlar. */
-    val needsConfirmation = setOf(SEND_TELEGRAM_MESSAGE)
+    val needsConfirmation = setOf(SEND_TELEGRAM_MESSAGE, CALL_CONTACT, CALL_NUMBER)
+
+    /** CALL_PHONE / READ_CONTACTS ruxsati kerak bo'lgan actionlar. */
+    val needsCallPermission = setOf(CALL_CONTACT, CALL_NUMBER)
 }

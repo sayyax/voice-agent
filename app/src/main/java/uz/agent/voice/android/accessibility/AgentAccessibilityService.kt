@@ -107,6 +107,28 @@ class AgentAccessibilityService : AccessibilityService() {
             return false
         }
 
+        /**
+         * Matn/tavsif orqali topilmasa, tugmaning texnik id nomi (masalan "action_search")
+         * ichida shu bo'laklardan birini qidirib bosadi. Til/lokalizatsiyaga bog'liq bo'lmagan zaxira usul.
+         */
+        fun clickByIdContains(vararg idParts: String): Boolean {
+            val svc = instance ?: return false
+            val root = svc.rootInActiveWindow ?: return false
+            val node = findByIdContains(root, idParts.map { it.lowercase() }) ?: return false
+            return clickable(node).performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        }
+
+        private fun findByIdContains(node: AccessibilityNodeInfo, parts: List<String>): AccessibilityNodeInfo? {
+            val id = try { node.viewIdResourceName?.lowercase() } catch (e: Exception) { null }
+            if (id != null && parts.any { id.contains(it) }) return node
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                val found = findByIdContains(child, parts)
+                if (found != null) return found
+            }
+            return null
+        }
+
         fun typeText(text: String): Boolean {
             val svc = instance ?: return false
             val root = svc.rootInActiveWindow ?: return false
