@@ -49,7 +49,7 @@ class AgentAccessibilityService : AccessibilityService() {
             instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS) ?: false
 
         /** Bir necha marta ozgina kutib, oldingi ilova kutilganiga mos kelishini tekshiradi. */
-        fun waitForForeground(expectedPackages: List<String>, timeoutMs: Long = 1500): Boolean {
+        fun waitForForeground(expectedPackages: List<String>, timeoutMs: Long = 5000): Boolean {
             val step = 150L
             var waited = 0L
             while (waited < timeoutMs) {
