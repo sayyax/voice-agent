@@ -12,6 +12,8 @@ import uz.agent.voice.android.apps.AppEntry
 import uz.agent.voice.android.apps.AppOpener
 import uz.agent.voice.android.apps.AppRegistry
 import uz.agent.voice.android.contacts.ContactsLookup
+import uz.agent.voice.agent.wiki.WikiManager
+import uz.agent.voice.config.Prefs
 import uz.agent.voice.android.files.FileTools
 import uz.agent.voice.termux.TermuxBridge
 
@@ -172,6 +174,24 @@ class ActionExecutor(private val ctx: Context) {
                 if (!opened.ok) return opened
                 if (ClaudeActions.sendText(text)) ActionResult(true, "Claude'ga matn yuborildi.")
                 else ActionResult(false, "Claude'ga matn yuborib bo'lmadi.")
+            }
+            ActionNames.WIKI_ADD_SOURCE -> {
+                if (!WikiManager.hasAccess()) return ActionResult(false, "Bu amal uchun Fayllar (barcha fayllarga kirish) permission kerak.")
+                val key = Prefs.geminiKey(ctx) ?: return ActionResult(false, "Bu amal uchun Gemini kaliti kerak. Sozlamalarda kiriting.")
+                val model = Prefs.model(ctx)
+                val content = action.params.getValue("content")
+                val title = action.params["title"]?.takeIf { it.isNotBlank() } ?: content.take(60)
+                val category = action.params["category"] ?: "notes"
+                val outcome = WikiManager.curate(key, model, title, content, category)
+                ActionResult(outcome.ok, outcome.message)
+            }
+            ActionNames.WIKI_ASK -> {
+                if (!WikiManager.hasAccess()) return ActionResult(false, "Bu amal uchun Fayllar (barcha fayllarga kirish) permission kerak.")
+                val key = Prefs.geminiKey(ctx) ?: return ActionResult(false, "Bu amal uchun Gemini kaliti kerak. Sozlamalarda kiriting.")
+                val model = Prefs.model(ctx)
+                val question = action.params.getValue("question")
+                val outcome = WikiManager.ask(key, model, question)
+                ActionResult(outcome.ok, outcome.message)
             }
             else -> ActionResult(false, "Noma'lum action.")
         }

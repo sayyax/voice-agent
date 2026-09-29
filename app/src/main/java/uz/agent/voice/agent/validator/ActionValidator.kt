@@ -77,6 +77,14 @@ class ActionValidator(private val apps: List<AppEntry>) {
                 if (action.params["text"].isNullOrBlank()) Validation(false, "Claude'ga nima yozish kerak?")
                 else Validation(true)
             }
+            ActionNames.WIKI_ADD_SOURCE -> {
+                if (action.params["content"].isNullOrBlank()) Validation(false, "Nimani wiki'ga qo'shish kerak?")
+                else Validation(true)
+            }
+            ActionNames.WIKI_ASK -> {
+                if (action.params["question"].isNullOrBlank()) Validation(false, "Wiki'dan nimani so'ramoqchisiz?")
+                else Validation(true)
+            }
             ActionNames.PRESS_BACK, ActionNames.PRESS_HOME, ActionNames.PRESS_RECENTS,
             ActionNames.SCROLL_DOWN, ActionNames.SCROLL_UP -> Validation(true)
             else -> Validation(false, "Noma'lum action.")

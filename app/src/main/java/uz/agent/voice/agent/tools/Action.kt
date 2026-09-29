@@ -30,6 +30,8 @@ object ActionNames {
     const val RENAME_FILE = "rename_file"
     const val RUN_TERMUX = "run_termux"
     const val OPEN_CLAUDE_WITH_TEXT = "open_claude_with_text"
+    const val WIKI_ADD_SOURCE = "wiki_add_source"
+    const val WIKI_ASK = "wiki_ask"
     const val CLARIFY = "clarify"
     const val UNKNOWN = "unknown"
 
@@ -41,7 +43,7 @@ object ActionNames {
         OPEN_TELEGRAM_CHAT, SEND_TELEGRAM_MESSAGE,
         CALL_CONTACT, CALL_NUMBER,
         FIND_FILE, MOVE_FILE, RENAME_FILE, RUN_TERMUX,
-        OPEN_CLAUDE_WITH_TEXT
+        OPEN_CLAUDE_WITH_TEXT, WIKI_ADD_SOURCE, WIKI_ASK
     )
 
     /** Accessibility ruxsati yoqilgan bo'lishi shart bo'lgan actionlar. */
