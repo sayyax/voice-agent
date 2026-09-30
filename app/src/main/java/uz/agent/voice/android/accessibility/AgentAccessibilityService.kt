@@ -1,9 +1,17 @@
 package uz.agent.voice.android.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.graphics.Bitmap
+import android.graphics.Path
+import android.os.Build
 import android.os.Bundle
+import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import uz.agent.voice.android.vision.OcrFallback
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * Android Accessibility Service. Ekrandagi elementlarni o'qish, bosish, matn kiritish,
@@ -197,5 +205,61 @@ class AgentAccessibilityService : AccessibilityService() {
         }
 
         fun clickMatch(text: String): Boolean = clickText(text)
+
+        /** Node daraxtida topilmagan holda ekranni skrinshot qilib, OCR bilan matnni topadi. */
+        fun takeScreenshotBitmap(): Bitmap? {
+            val svc = instance ?: return null
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+            val latch = CountDownLatch(1)
+            var result: Bitmap? = null
+            try {
+                svc.takeScreenshot(
+                    Display.DEFAULT_DISPLAY,
+                    svc.mainExecutor,
+                    object : AccessibilityService.TakeScreenshotCallback {
+                        override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
+                            try {
+                                val hw = screenshot.hardwareBuffer
+                                val bmp = Bitmap.wrapHardwareBuffer(hw, screenshot.colorSpace)
+                                result = bmp?.copy(Bitmap.Config.ARGB_8888, false)
+                                hw.close()
+                            } catch (e: Exception) { }
+                            latch.countDown()
+                        }
+                        override fun onFailure(errorCode: Int) { latch.countDown() }
+                    }
+                )
+            } catch (e: Exception) {
+                return null
+            }
+            latch.await(5, TimeUnit.SECONDS)
+            return result
+        }
+
+        fun dispatchTap(x: Float, y: Float): Boolean {
+            val svc = instance ?: return false
+            val path = Path().apply { moveTo(x, y) }
+            val stroke = GestureDescription.StrokeDescription(path, 0, 80)
+            val gesture = GestureDescription.Builder().addStroke(stroke).build()
+            val latch = CountDownLatch(1)
+            var ok = false
+            svc.dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) {
+                    ok = true
+                    latch.countDown()
+                }
+                override fun onCancelled(gestureDescription: GestureDescription?) { latch.countDown() }
+            }, null)
+            latch.await(3, TimeUnit.SECONDS)
+            return ok
+        }
+
+        /** click_text node orqali topilmasa ishlatiladigan zaxira: skrinshot + OCR + bosish. */
+        fun clickByOcr(text: String): Boolean {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
+            val bmp = takeScreenshotBitmap() ?: return false
+            val match = OcrFallback.findText(bmp, text) ?: return false
+            return dispatchTap(match.centerX, match.centerY)
+        }
     }
 }

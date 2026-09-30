@@ -70,6 +70,7 @@ class ActionExecutor(private val ctx: Context) {
             ActionNames.CLICK_TEXT -> {
                 val text = action.params.getValue("text")
                 if (AgentAccessibilityService.clickText(text)) ActionResult(true, "\"$text\" bosildi.")
+                else if (AgentAccessibilityService.clickByOcr(text)) ActionResult(true, "\"$text\" (skrinshotdan) bosildi.")
                 else ActionResult(false, "\"$text\" ekranda topilmadi.")
             }
             ActionNames.TYPE_TEXT -> {
