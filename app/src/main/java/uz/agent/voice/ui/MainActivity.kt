@@ -29,6 +29,7 @@ import uz.agent.voice.voice.AndroidSttProvider
 import uz.agent.voice.voice.AndroidTtsProvider
 import uz.agent.voice.voice.STTProvider
 import uz.agent.voice.voice.TTSProvider
+import uz.agent.voice.wake.WakeWordService
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -46,6 +47,7 @@ class MainActivity : Activity() {
     private lateinit var logScroll: ScrollView
     private lateinit var input: EditText
     private lateinit var micButton: Button
+    private lateinit var wakeButton: Button
     private var listening = false
     private var pendingSteps: List<Action>? = null
 
@@ -143,6 +145,14 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(4) })
 
+        wakeButton = Button(this).apply {
+            text = "Doim tinglash: o'chiq"
+            setOnClickListener { toggleWakeWord() }
+        }
+        root.addView(wakeButton, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(4) })
+
         root.addView(Button(this).apply {
             text = "Fayllar ruxsatini ochish"
             setOnClickListener { openFilePermissionSettings() }
@@ -170,6 +180,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         refreshPermissions()
+        wakeButton.text = if (WakeWordService.isRunning) "Doim tinglash: yoqiq" else "Doim tinglash: o'chiq"
     }
 
     override fun onDestroy() {
@@ -202,6 +213,30 @@ class MainActivity : Activity() {
         if (!hasContacts()) need += Manifest.permission.READ_CONTACTS
         if (!hasCallPhone()) need += Manifest.permission.CALL_PHONE
         if (need.isNotEmpty()) requestPermissions(need.toTypedArray(), 2)
+    }
+
+    private fun hasNotifications(): Boolean =
+        if (Build.VERSION.SDK_INT >= 33)
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        else true
+
+    private fun toggleWakeWord() {
+        if (WakeWordService.isRunning) {
+            stopService(Intent(this, WakeWordService::class.java))
+            wakeButton.text = "Doim tinglash: o'chiq"
+            return
+        }
+        if (!hasMic()) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 33 && !hasNotifications()) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 3)
+        }
+        val intent = Intent(this, WakeWordService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
+        wakeButton.text = "Doim tinglash: yoqiq"
+        log("Doim tinglash yoqildi. \"Agent\" deb chaqiring.")
     }
 
     private fun openFilePermissionSettings() {
