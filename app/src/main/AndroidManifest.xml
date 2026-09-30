@@ -27,7 +27,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="Ovozli Agent"
+        android:label="Sayyax"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
             android:name=".ui.MainActivity"
@@ -46,7 +46,7 @@
         <service
             android:name=".android.accessibility.AgentAccessibilityService"
             android:exported="true"
-            android:label="Ovozli Agent"
+            android:label="Sayyax"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

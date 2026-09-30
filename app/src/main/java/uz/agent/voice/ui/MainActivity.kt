@@ -93,7 +93,7 @@ class MainActivity : Activity() {
         }
 
         root.addView(TextView(this).apply {
-            text = "Ovozli Agent"
+            text = "Sayyax"
             textSize = 24f
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(Color.parseColor("#111111"))

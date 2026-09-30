@@ -36,7 +36,7 @@ class WakeWordService : Service() {
     companion object {
         const val CHANNEL_ID = "wake_word_channel"
         const val NOTIF_ID = 42
-        const val WAKE_WORD = "agent"
+        const val WAKE_WORD = "sayyax"
         const val ACTION_STOP = "uz.agent.voice.wake.STOP"
         @Volatile var isRunning = false
             private set
@@ -60,7 +60,7 @@ class WakeWordService : Service() {
         tts = AndroidTtsProvider(this) { }
         stt = AndroidSttProvider(this)
         createChannel()
-        startForeground(NOTIF_ID, buildNotification("Uyg'otuvchi so'zni kutyapman (\"agent\")..."))
+        startForeground(NOTIF_ID, buildNotification("Uyg'otuvchi so'zni kutyapman (\"sayyax\")..."))
         mode = Mode.WAKE
         listenCycle()
     }
@@ -79,7 +79,7 @@ class WakeWordService : Service() {
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val ch = NotificationChannel(CHANNEL_ID, "Ovozli Agent - doim tinglash", NotificationManager.IMPORTANCE_LOW)
+            val ch = NotificationChannel(CHANNEL_ID, "Sayyax - doim tinglash", NotificationManager.IMPORTANCE_LOW)
             (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(ch)
         }
     }
@@ -94,7 +94,7 @@ class WakeWordService : Service() {
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             Notification.Builder(this, CHANNEL_ID) else Notification.Builder(this)
         return builder
-            .setContentTitle("Ovozli Agent")
+            .setContentTitle("Sayyax")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(openPi)
@@ -126,7 +126,7 @@ class WakeWordService : Service() {
     private fun onWakeDetected() {
         mode = Mode.COMMAND
         updateNotification("Eshityapman...")
-        tts.speak("Labbay")
+        tts.speak("Hov Abdulaziz, eshityapman!")
         handler.postDelayed({ listenCycle() }, 900)
     }
 
@@ -216,7 +216,7 @@ class WakeWordService : Service() {
 
     private fun backToWake() {
         mode = Mode.WAKE
-        updateNotification("Uyg'otuvchi so'zni kutyapman (\"agent\")...")
+        updateNotification("Uyg'otuvchi so'zni kutyapman (\"sayyax\")...")
         handler.postDelayed({ listenCycle() }, 1200)
     }
 }
