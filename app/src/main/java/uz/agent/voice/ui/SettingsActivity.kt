@@ -120,7 +120,7 @@ class SettingsActivity : Activity() {
             )
             runOnUiThread {
                 resultView.text = plan.error?.let { "XATO: $it" }
-                    ?: "OK. Gemini javobi: ${plan.action}"
+                    ?: "OK. Qadamlar: ${plan.steps.joinToString { it.name }}"
             }
         }.start()
     }

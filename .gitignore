@@ -4,3 +4,4 @@ local.properties
 *.iml
 .idea/
 ton-market/
+build_log.txt

@@ -16,6 +16,7 @@ object ClaudeActions {
         Thread.sleep(700)
         if (!AgentAccessibilityService.typeText(text)) return false
         Thread.sleep(300)
-        return AgentAccessibilityService.clickAny(sendWords, sendIds)
+        return AgentAccessibilityService.clickByCandidates(*sendWords.toTypedArray()) ||
+            AgentAccessibilityService.clickByIdContains(*sendIds.toTypedArray())
     }
 }
