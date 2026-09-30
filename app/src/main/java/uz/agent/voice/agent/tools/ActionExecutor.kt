@@ -194,6 +194,20 @@ class ActionExecutor(private val ctx: Context) {
                 val outcome = WikiManager.ask(key, model, question)
                 ActionResult(outcome.ok, outcome.message)
             }
+            ActionNames.WIKI_ADD_URL -> {
+                if (!WikiManager.hasAccess()) return ActionResult(false, "Bu amal uchun Fayllar (barcha fayllarga kirish) permission kerak.")
+                val key = Prefs.geminiKey(ctx) ?: return ActionResult(false, "Bu amal uchun Gemini kaliti kerak. Sozlamalarda kiriting.")
+                val model = Prefs.model(ctx)
+                val url = action.params.getValue("url")
+                val category = action.params["category"] ?: "articles"
+                val outcome = WikiManager.curateFromUrl(key, model, url, category)
+                ActionResult(outcome.ok, outcome.message)
+            }
+            ActionNames.WIKI_AUDIT -> {
+                if (!WikiManager.hasAccess()) return ActionResult(false, "Bu amal uchun Fayllar (barcha fayllarga kirish) permission kerak.")
+                val outcome = WikiManager.audit()
+                ActionResult(outcome.ok, outcome.message)
+            }
             else -> ActionResult(false, "Noma'lum action.")
         }
     }

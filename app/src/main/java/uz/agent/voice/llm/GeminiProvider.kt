@@ -268,6 +268,8 @@ Available actions:
 - open_claude_with_text {text:"<text to send to the Claude app>"}
 - wiki_add_source {content:"<the source text to remember, keep the user's own wording/facts as given>", title:"<short title inferred from the content if not stated>", category:"<one of articles|papers|transcripts|notes, default notes>"}
 - wiki_ask {question:"<user's question to answer from their personal wiki>"}
+- wiki_add_url {url:"<https:// link the user wants saved to their wiki>", category:"<one of articles|papers|transcripts|notes, default articles>"}
+- wiki_audit  with no params — check the personal wiki's consistency (page/source counts, pages missing from index.md)
 - clarify  with top-level "say" set to one short Uzbek question — when the command is ambiguous or a needed detail is missing
 - unknown  with top-level "say" set to a short Uzbek explanation — when the command is none of the above
 

@@ -2,6 +2,8 @@ package uz.agent.voice.agent.wiki
 
 import android.os.Environment
 import uz.agent.voice.llm.GeminiProvider
+import java.net.HttpURLConnection
+import java.net.URL
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -125,6 +127,84 @@ object WikiManager {
         val (answer, error) = provider.askWiki(question, context.toString().take(12000))
         if (error != null) return WikiOutcome(false, error)
         return WikiOutcome(true, answer ?: "Javob topilmadi.")
+    }
+
+    private data class FetchedPage(val title: String, val text: String)
+
+    private fun decodeHtmlEntities(s: String): String = s
+        .replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<")
+        .replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'")
+
+    private fun fetchUrl(urlStr: String): Pair<FetchedPage?, String?> {
+        var conn: HttpURLConnection? = null
+        return try {
+            conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 10000
+                readTimeout = 15000
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", "Mozilla/5.0 (Android) OvozliAgent/1.0")
+            }
+            val code = conn.responseCode
+            if (code !in 200..299) return Pair(null, "Sahifani ochib bo'lmadi (kod $code).")
+            val html = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val titleMatch = Regex("(?is)<title[^>]*>(.*?)</title>").find(html)
+            val title = titleMatch?.groupValues?.get(1)?.let { decodeHtmlEntities(it).trim() }?.ifBlank { null } ?: urlStr
+            var body = html
+                .replace(Regex("(?is)<script.*?</script>"), " ")
+                .replace(Regex("(?is)<style.*?</style>"), " ")
+                .replace(Regex("(?is)<!--.*?-->"), " ")
+                .replace(Regex("(?is)<(br|p|div|li|h[1-6])[^>]*>"), "
+")
+                .replace(Regex("(?is)<[^>]+>"), " ")
+            body = decodeHtmlEntities(body)
+            body = body.replace(Regex("[ \t]+"), " ").replace(Regex("
+{3,}"), "
+
+").trim()
+            if (body.length > 20000) body = body.take(20000)
+            if (body.isBlank()) return Pair(null, "Sahifadan matn topilmadi.")
+            Pair(FetchedPage(title, body), null)
+        } catch (e: Exception) {
+            Pair(null, "Havolani ochishda xato: ${e.message}")
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+    /** Havoladagi sahifani o'qib, matnini manba sifatida saqlab, wiki'ga qo'shadi. */
+    fun curateFromUrl(apiKey: String, model: String, url: String, category: String): WikiOutcome {
+        val (fetched, err) = fetchUrl(url)
+        if (fetched == null) return WikiOutcome(false, err ?: "Havolani o'qib bo'lmadi.")
+        val contentWithSource = fetched.text + "
+
+(Manba havola: $url)"
+        return curate(apiKey, model, fetched.title, contentWithSource, category)
+    }
+
+    /** Vault holatini tekshiradi: nechta manba/sahifa bor, index.md'da ko'rinmayotgan sahifalar bormi. */
+    fun audit(): WikiOutcome {
+        if (!vaultDir().exists()) return WikiOutcome(false, "Hali wiki bo'sh. Avval biror manba qo'shing.")
+        val wikiDir = File(vaultDir(), "wiki")
+        val pages = if (wikiDir.exists())
+            wikiDir.walkTopDown().filter { it.isFile && it.extension == "md" }
+                .map { it.relativeTo(vaultDir()).path }.toList()
+        else emptyList()
+        val rawDir = File(vaultDir(), "raw")
+        val rawCount = if (rawDir.exists()) rawDir.walkTopDown().filter { it.isFile && it.extension == "md" }.count() else 0
+        val index = readIndex()
+        val orphans = pages.filter { p -> !index.contains(p) && !index.contains(File(p).name) }
+
+        val msg = StringBuilder("Wiki'da $rawCount ta manba va ${pages.size} ta sahifa bor.")
+        if (orphans.isEmpty()) {
+            msg.append(" Barcha sahifalar index'da ko'rsatilgan.")
+        } else {
+            msg.append(" ${orphans.size} ta sahifa index.md'da yo'q: ")
+            msg.append(orphans.take(5).joinToString(", "))
+            if (orphans.size > 5) msg.append(" va yana ${orphans.size - 5} ta")
+            msg.append(".")
+        }
+        return WikiOutcome(true, msg.toString())
     }
 }
 
