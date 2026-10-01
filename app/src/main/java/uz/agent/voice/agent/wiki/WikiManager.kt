@@ -154,14 +154,10 @@ object WikiManager {
                 .replace(Regex("(?is)<script.*?</script>"), " ")
                 .replace(Regex("(?is)<style.*?</style>"), " ")
                 .replace(Regex("(?is)<!--.*?-->"), " ")
-                .replace(Regex("(?is)<(br|p|div|li|h[1-6])[^>]*>"), "
-")
+                .replace(Regex("(?is)<(br|p|div|li|h[1-6])[^>]*>"), "\n")
                 .replace(Regex("(?is)<[^>]+>"), " ")
             body = decodeHtmlEntities(body)
-            body = body.replace(Regex("[ \t]+"), " ").replace(Regex("
-{3,}"), "
-
-").trim()
+            body = body.replace(Regex("[ \t]+"), " ").replace(Regex("\n{3,}"), "\n\n").trim()
             if (body.length > 20000) body = body.take(20000)
             if (body.isBlank()) return Pair(null, "Sahifadan matn topilmadi.")
             Pair(FetchedPage(title, body), null)
